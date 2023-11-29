@@ -8,24 +8,19 @@ using System.Xml.Linq;
 
 namespace Sudoku
 {
-    internal class Grid
+    public enum SudokuRegion
+    {
+        Matrix,
+        Row,
+        Column
+    }
+
+    public class Grid
     {
         public int[,] grid = new int[9, 9];
-        public int[,,] orderedMatrices = {
-            {{0, 0}, {0, 1}, {0, 2}, {1, 0}, {1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}},
-            {{0, 3}, {0, 4}, {0, 5}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {2, 4}, {2, 5}},
-            {{0, 6}, {0, 7}, {0, 8}, {1, 6}, {1, 7}, {1, 8}, {2, 6}, {2, 7}, {2, 8}},
 
-            {{3, 0}, {3, 1}, {3, 2}, {4, 0}, {4, 1}, {4, 2}, {5, 0}, {5, 1}, {5, 2}},
-            {{3, 3}, {3, 4}, {3, 5}, {4, 3}, {4, 4}, {4, 5}, {5, 3}, {5, 4}, {5, 5}},
-            {{3, 6}, {3, 7}, {3, 8}, {4, 6}, {4, 7}, {4, 8}, {5, 6}, {5, 7}, {5, 8}},
-
-            {{6, 0}, {6, 1}, {6, 2}, {7, 0}, {7, 1}, {7, 2}, {8, 0}, {8, 1}, {8, 2}},
-            {{6, 3}, {6, 4}, {6, 5}, {7, 3}, {7, 4}, {7, 5}, {8, 3}, {8, 4}, {8, 5}},
-            {{6, 6}, {6, 7}, {6, 8}, {7, 6}, {7, 7}, {7, 8}, {8, 6}, {8, 7}, {8, 8}}
-        };
         readonly IndexOutOfRangeException exceptionIndexOutOfRange0to9 = new("Index is invalid. Allowed 0-9.");
-        readonly ArgumentOutOfRangeException exceptionArgumentOutOfRange0to9 = new ArgumentOutOfRangeException("Value is invalid. Allowed 0-9.");
+        readonly ArgumentOutOfRangeException exceptionArgumentOutOfRange0to9 = new("Value is invalid. Allowed 0-9.");
 
         public Grid()
         {
@@ -94,6 +89,15 @@ namespace Sudoku
             return retVal;
         }
 
+        public static (int rowIndex, int columnIndex) MatrixToGridLocation(int matrixIndex, int positionIndex)
+        {
+            return (matrixIndex / 3 * 3 + (positionIndex / 3), matrixIndex % 3 * 3 + (positionIndex % 3));
+        }
+        public static (int matrixIndex, int positionIndex) GridToMatrixLocation(int rowIndex, int columnIndex)
+        {
+            return (rowIndex / 3 * 3 + (columnIndex / 3), rowIndex % 3 * 3 + (columnIndex % 3));
+        }
+
         public int[] GetNumsInMatrix(int matrixIndex)
         {
             if (matrixIndex < 0 || matrixIndex >= 9) throw exceptionIndexOutOfRange0to9;
@@ -102,7 +106,8 @@ namespace Sudoku
 
             for (int i = 0; i < 9; i++)
             {
-                retVal[i] = grid[orderedMatrices[matrixIndex, i, 0], orderedMatrices[matrixIndex, i, 1]];
+                var (rowIndex, columnIndex) = MatrixToGridLocation(matrixIndex, i);
+                retVal[i] = grid[rowIndex, columnIndex];
             }
 
             return retVal;
@@ -110,40 +115,92 @@ namespace Sudoku
 
         public int IndexOfNumInMatrix(int num, int matrixIndex)
         {
-            if (matrixIndex < 0 || matrixIndex >= 9) throw exceptionIndexOutOfRange0to9;
-            if (num < 0 || num > 9) throw exceptionArgumentOutOfRange0to9;
-
-            for (int i = 0; i < 9; i++)
-            {
-                if (grid[orderedMatrices[matrixIndex, i, 0], orderedMatrices[matrixIndex, i, 1]] == num)
-                    return i;
-            }
-
-            return -1;
+            return IndexOfNumInRegion(num, SudokuRegion.Matrix, matrixIndex);
         }
         public int IndexOfNumInRow(int num, int rowIndex)
         {
-            if (rowIndex < 0 || rowIndex >= 9) throw exceptionIndexOutOfRange0to9;
-            if (num < 0 || num > 9) throw exceptionArgumentOutOfRange0to9;
+            return IndexOfNumInRegion(num, SudokuRegion.Row, rowIndex);
+        }
+        public int IndexOfNumInColumn(int num, int columnIndex)
+        {
+            return IndexOfNumInRegion(num, SudokuRegion.Column, columnIndex);
+        }
+        public int IndexOfNumInRegion(int num, SudokuRegion region, int regionIndex, int skipPositionIndex = -1)
+        {
+            if (regionIndex < 0 || regionIndex >= 9) throw exceptionIndexOutOfRange0to9;
 
-            for (int i = 0; i < 9; i++)
+            switch (region)
             {
-                if (grid[rowIndex, i] == num) return i;
+                case SudokuRegion.Matrix:
+                    for (int i = 0; i < 9; i++)
+                    {
+                        if (i != skipPositionIndex)
+                        {
+                            var (rowIndex, columnIndex) = MatrixToGridLocation(regionIndex, i);
+                            if (grid[rowIndex, columnIndex] == num)
+                                return i;
+                        }
+                    }
+                    break;
+                case SudokuRegion.Row:
+                    for (int i = 0; i < 9; i++)
+                    {
+                        if (i != skipPositionIndex && grid[regionIndex, i] == num) return i;
+                    }
+                    break;
+                case SudokuRegion.Column:
+                    for (int i = 0; i < 9; i++)
+                    {
+                        if (i != skipPositionIndex && grid[i, regionIndex] == num) return i;
+                    }
+                    break;
+                default:
+                    break;
             }
 
             return -1;
         }
-        public int IndexOfNumInColumn(int num, int columnIndex)
+
+        public bool SetNumInMatrix(int num, int matrixIndex, int positionIndex, bool validate = false)
         {
-            if (columnIndex < 0 || columnIndex >= 9) throw exceptionIndexOutOfRange0to9;
-            if (num < 0 || num > 9) throw exceptionArgumentOutOfRange0to9;
+            return SetNumInRegion(num, SudokuRegion.Matrix, matrixIndex, positionIndex, validate);
+        }
+        public bool SetNumInRow(int num, int rowIndex, int positionIndex, bool validate = false)
+        {
+            return SetNumInRegion(num, SudokuRegion.Row, rowIndex, positionIndex, validate);
+        }
+        public bool SetNumInColumn(int num, int columnIndex, int positionIndex, bool validate = false)
+        {
+            return SetNumInRegion(num, SudokuRegion.Column, columnIndex, positionIndex, validate);
+        }
+        public bool SetNumInRegion(int num, SudokuRegion region, int regionIndex, int positionIndex, bool validate = false)
+        {
+            if (regionIndex < 0 || regionIndex >= 9 || positionIndex < 0 || positionIndex >= 9) throw exceptionIndexOutOfRange0to9;
+            if (validate && (num < 0 || num > 9)) throw exceptionArgumentOutOfRange0to9;
 
-            for (int i = 0; i < 9; i++)
+            switch (region)
             {
-                if (grid[i, columnIndex] == num) return i;
+                case SudokuRegion.Matrix:
+                    var (rowIndex, columnIndex) = MatrixToGridLocation(regionIndex, positionIndex);
+                    if(validate && !ConformsToRules(num, region, regionIndex, positionIndex)) return false;
+                    grid[rowIndex, columnIndex] = num;
+                    break;
+                case SudokuRegion.Row:
+                    if(validate && !ConformsToRules(num, region, regionIndex, positionIndex)) return false;
+                    grid[regionIndex, positionIndex] = num;
+                    break;
+                case SudokuRegion.Column:
+                    if(validate && !ConformsToRules(num, region, regionIndex, positionIndex)) return false;
+                    grid[positionIndex, regionIndex] = num;
+                    break;
             }
-
-            return -1;
+            return true;
+        }
+        public bool ConformsToRules(int newNum, SudokuRegion region, int regionIndex, int positionIndex)
+        {
+            if (regionIndex < 0 || regionIndex >= 9 || positionIndex < 0 || positionIndex >= 9) throw exceptionIndexOutOfRange0to9;
+            if (newNum < 0 || newNum > 9) return false;
+            return IndexOfNumInRegion(newNum, region, regionIndex, positionIndex) < 0;
         }
     }
 }
